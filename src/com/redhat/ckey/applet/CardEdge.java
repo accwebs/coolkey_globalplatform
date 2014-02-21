@@ -122,9 +122,9 @@ public class CardEdge extends Applet
     private static final byte VERSION_PROTOCOL_MAJOR = 1;
     private static final byte VERSION_PROTOCOL_MINOR = 1;
     private static final byte VERSION_APPLET_MAJOR = 1;
-    private static final byte VERSION_APPLET_MINOR = 4;
-    private static final short BUILDID_MAJOR = (short) 0x5261;
-    private static final short BUILDID_MINOR = (short) 0x7c4e;
+    private static final byte VERSION_APPLET_MINOR = 5;
+    private static final short BUILDID_MAJOR = (short) 0x5307;
+    private static final short BUILDID_MINOR = (short) 0xd19e;
     private static final short ZEROS = 0;
 
     // * Enable pin size check
