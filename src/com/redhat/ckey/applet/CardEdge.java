@@ -65,8 +65,9 @@ import javacard.framework.*;
 import javacard.security.*;
 import javacardx.crypto.Cipher;
 
-import visa.openplatform.ProviderSecurityDomain;
-import visa.openplatform.OPSystem;
+// AC: GP211 Change - Import from newer namespace.
+import org.globalplatform.GPSystem;
+import org.globalplatform.SecureChannel;
 
 // Referenced classes of package com.redhat.ckey.applet:
 //	    MemoryManager, ObjectManager, ASN1
@@ -465,7 +466,7 @@ public class CardEdge extends Applet
     private short         nonce_ids;        /* high */
     private short         iobuf_size;       /* medium */
     private byte          key_it;           /* low */
-    private byte          channelID;        /* low */
+    //private byte          channelID;        /* low */
 
     /**
      * Instance variable objects and array declarations - PERSISTENT
@@ -1959,21 +1960,82 @@ public class CardEdge extends Applet
 	}
 	apdu.setIncomingAndReceive();
 
-	ProviderSecurityDomain domain = OPSystem.getSecurityDomain();
-	channelID = domain.openSecureChannel(apdu);
+	// AC: Process the INITIALIZE-UPDATE command in the GP system
+	//     Note that we haven't taken the approach of processing ALL unknown APDUs as specified in the SecureChannel javadoc.
+	//       This is because we prefer to comply with the Coolkey specification document which states that we only process
+	//       the INITIALIZE-UPDATE and EXTERNAL-AUTHENTICATE GP commands.
+	// Future work:  Consider amending the Coolkey specification and moving this to process()?
+	short len = 0;
+	try{
+		SecureChannel sc = GPSystem.getSecureChannel();
+		len = sc.processSecurity(apdu);
+	}catch(ISOException e){
+		if ((e.getReason() == ISO7816.SW_CLA_NOT_SUPPORTED) || (e.getReason() == ISO7816.SW_INS_NOT_SUPPORTED)){
+			// this should never occur because processSecurity should know how to handle the INITIALIZE-UPDATE command
+			ISOException.throwIt(ISO7816.SW_UNKNOWN);
+		}else{
+			throw e;
+		}
+	}
 
-	short len = (short)(buffer[ISO7816.OFFSET_LC]&0xff);
+	// AC: Remove old OP code
+	//ProviderSecurityDomain domain = OPSystem.getSecurityDomain();
+	//channelID = domain.openSecureChannel(apdu);
+	//
+	//short len = (short)(buffer[ISO7816.OFFSET_LC]&0xff);
+	
 	apdu.setOutgoing();
 	apdu.setOutgoingLength(len);
-	apdu.sendBytes(ISO7816.OFFSET_CDATA, len);
+	
+	// AC: don't send if len == 0 
+	if (len > 0){
+		apdu.sendBytes(ISO7816.OFFSET_CDATA, len);
+	}
     }
 
     private void externalAuthenticate(APDU apdu, byte[] buffer) 
     {
 	apdu.setIncomingAndReceive();
-	ProviderSecurityDomain domain = OPSystem.getSecurityDomain();
-	domain.verifyExternalAuthenticate(channelID, apdu);
-
+	
+	// AC: Process the EXTERNAL-AUTHENTICATE command in the GP system
+	//     Note that we haven't taken the approach of processing ALL unknown APDUs as specified in the SecureChannel javadoc.
+	//       This is because we prefer to comply with the Coolkey specification document which states that we only process
+	//       the INITIALIZE-UPDATE and EXTERNAL-AUTHENTICATE GP commands.
+	// Future work:  Consider amending the Coolkey specification and moving this to process()?
+	short len = 0;
+	SecureChannel sc = null;
+	try{
+		sc = GPSystem.getSecureChannel();
+		len = sc.processSecurity(apdu);
+	}catch(ISOException e){
+		if ((e.getReason() == ISO7816.SW_CLA_NOT_SUPPORTED) || (e.getReason() == ISO7816.SW_INS_NOT_SUPPORTED)){
+			// this should never occur because processSecurity should know how to handle the EXTERNAL-AUTHENTICATE command
+			ISOException.throwIt(ISO7816.SW_UNKNOWN);
+		}else{
+			throw e;
+		}
+	}
+	
+	// AC: Remove old OP code
+	//ProviderSecurityDomain domain = OPSystem.getSecurityDomain();
+	//domain.verifyExternalAuthenticate(channelID, apdu);
+	
+	// AC: Check resulting secure channel state
+	byte securityLevel = sc.getSecurityLevel();
+	if ((securityLevel & SecureChannel.AUTHENTICATED) == 0){
+		// authentication has not occurred
+		ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+	}
+	
+	// AC: send any resulting data in compliance with the spec (will probably be 0 for EXT-AUTH)
+	apdu.setOutgoing();
+	apdu.setOutgoingLength(len);
+	if (len > 0){
+		apdu.sendBytes(ISO7816.OFFSET_CDATA, len);
+	}
+	
+	/* AC: No longer need the APDU-buffer checking code below 
+         *
 	// According to the Global Platform programming guidelines,
 	// we might need to verify the security level ourselves.
 	// Secrity level 0: No secure messaging
@@ -1996,13 +2058,37 @@ public class CardEdge extends Applet
 	if (( buffer[ISO7816.OFFSET_P1] != (byte) 0x01 ) &&
 		( buffer[ISO7816.OFFSET_P1] != (byte) 0x03 )) {
 	    ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-	}
+	}*/
     }
 
     private void verifySecureChannel(APDU apdu, byte[] buffer) {
-	apdu.setIncomingAndReceive();
-	ProviderSecurityDomain domain = OPSystem.getSecurityDomain();
-	domain.unwrap(channelID, apdu);
+	// AC: Retrieve length of received buffer
+	short len = apdu.setIncomingAndReceive();
+	
+	// AC: Get Secure channel
+	SecureChannel sc = GPSystem.getSecureChannel();
+	
+	// AC: Check secure channel state
+	byte securityLevel = sc.getSecurityLevel();
+	if ((securityLevel & SecureChannel.AUTHENTICATED) == 0){
+		// authentication has not occurred
+		ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+	}
+
+	// AC: Unwrap the APDU buffer
+	sc.unwrap(buffer, (short)0, (short)(len + ISO7816.OFFSET_CDATA));
+
+	// AC: Check secure channel state (again - after unwrap)
+	securityLevel = sc.getSecurityLevel();
+	if ((securityLevel & SecureChannel.AUTHENTICATED) == 0){
+		// authentication is no longer valid after unwrap
+		ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+	}
+
+	// AC: Remove OP code
+	//ProviderSecurityDomain domain = OPSystem.getSecurityDomain();
+	//domain.unwrap(channelID, apdu);
+	
 	AuthenticateIdentity(RA_IDENTITY);
     }
 
@@ -2467,7 +2553,13 @@ public class CardEdge extends Applet
 
     private void getLifeCycle(APDU apdu, byte[] buffer) {
 	byte lc = buffer[ISO7816.OFFSET_LC];
-	buffer[0] = OPSystem.getCardContentState();
+	
+	// AC: New GP code
+	buffer[0] = GPSystem.getCardContentState();
+	
+	// AC: Remove OP code
+	//buffer[0] = OPSystem.getCardContentState();
+	
 	if (lc == 1) {
 	    // compatibility
 	    apdu.setOutgoingAndSend(ZEROS, (short)1);
@@ -2484,8 +2576,12 @@ public class CardEdge extends Applet
 	if( lc != 0 )
 	    ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 
-	boolean result =
-	    OPSystem.setCardContentState(buffer[ISO7816.OFFSET_P1]);
+	// AC: New GP code
+	boolean result = GPSystem.setCardContentState(buffer[ISO7816.OFFSET_P1]);
+
+	// AC: Remove OP code
+	//boolean result =
+	//    OPSystem.setCardContentState(buffer[ISO7816.OFFSET_P1]);
 
 	if( result == false )
 	    ISOException.throwIt(SW_INVALID_PARAMETER);
