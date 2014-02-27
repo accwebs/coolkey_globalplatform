@@ -2208,14 +2208,61 @@ public class CardEdge extends Applet
 	if( buffer[ISO7816.OFFSET_LC] != (byte) 23 ) {
 	    ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 	}
+	
+	
+	
+	//DATA	KeyGenParams
+	//KeyGenParams:  --expected size = 23 = 1 + 2 + 1 + 19
+	//	Byte	Algorithm Type (0x03 RSA Private CRT)
+	//	Short	Key Size (in bits)
+	//	Byte	Options (set if options are provided in the temporary buffer)
+	//	WrappedKey	MacKey
+	//
+	//WrappedKey:  --expected size = 19 = 1 + 1 + 16 + 1 + 0 
+	//	Byte     Key Type - Mac (0x85)
+	//	Byte	   Key Size - key size in bytes
+	//	Byte[]   Key Data - encrypted and padded to the correct 3DES block boundary
+	//	Byte     Key Check Size
+	//	Byte[]   Key Check Data
 
-	ProviderSecurityDomain domain = OPSystem.getSecurityDomain();
-	boolean verified = false;
-	verified = domain.decryptVerifyKey(channelID, apdu, (short) 9);
-	if (!verified) {
-	    ISOException.throwIt(SW_BAD_WRAPPED_KEY);
+	// AC: New GP code to decrypt and verify the MAC key
+	short wrappedKeyFieldOffset = (short)(ISO7816.OFFSET_CDATA + 4);
+
+	// AC: Check the key type is as we expect
+	byte macKeyType = buffer[wrappedKeyFieldOffset + 0];
+	if (macKeyType != 0x80){
+		ISOException.throwIt(SW_KEY_TYPE_INVALID);
 	}
-
+	
+	// AC: Check that the key size is valid (i.e. enough data exists in the buffer)
+	short macKeySize = (short)(buffer[wrappedKeyFieldOffset + 1] & 0x00FF);
+	if (macKeySize != 0x10){
+		ISOException.throwIt(SW_KEY_SIZE_ERROR);
+	}
+	
+	// AC: Check that key check size is valid (must be zero due to silly length == 23 check above)
+	short macKeyCheckSize = (short)(buffer[wrappedKeyFieldOffset + 2 + 0x10] & 0x00FF);
+	if (macKeyCheckSize != 0){ 
+		ISOException.throwIt(SW_UNSUPPORTED_FEATURE);
+	}
+	
+	// AC: decrypt key data and verify that its length is still 16
+	SecureChannel sc = GPSystem.getSecureChannel();
+	short decryptedMacKeySize = sc.decryptData(buffer,(short)(wrappedKeyFieldOffset + 2), macKeySize);
+	if (decryptedMacKeySize != 0x10){
+		ISOException.throwIt(SW_BAD_WRAPPED_KEY);
+	}
+	
+	// AC: Remove old OP code
+	//ProviderSecurityDomain domain = OPSystem.getSecurityDomain();
+	//boolean verified = false;
+	//verified = domain.decryptVerifyKey(channelID, apdu, (short) 9);
+	//if (!verified) {
+	//    ISOException.throwIt(SW_BAD_WRAPPED_KEY);
+	//}
+	
+	
+	
 	GenerateKeyPairRSA(apdu, buffer, prv_key_nb, pub_key_nb, acl);
 
 	// copy public key to output object
@@ -2226,7 +2273,7 @@ public class CardEdge extends Applet
 
 	// Compute digest over public key and decrypted challenge.
 	// Write the digest into the iobuf.
-	Util.arrayCopyNonAtomic(buffer, (short)11, iobuf,
+	Util.arrayCopyNonAtomic(buffer, (short)11, iobuf,                // AC: 11 is start of decrypted MAC key data sent with command
 				(short)(2 + pubkeysize), (short)16);
 	doDigest(iobuf, (short)2, (short)(16+pubkeysize),
 		 iobuf, (short)(2+pubkeysize+modsize) );
@@ -3141,6 +3188,11 @@ public class CardEdge extends Applet
 	    ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
 	}
     
+    }
+    
+    // AC: Per GP API spec, need to call resetSecurity() in deselect().
+    public void deselect(){
+	GPSystem.getSecureChannel().resetSecurity();
     }
 }
 
