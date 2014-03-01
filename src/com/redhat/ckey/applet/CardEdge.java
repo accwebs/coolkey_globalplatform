@@ -459,7 +459,6 @@ public class CardEdge extends Applet
     private MessageDigest shaDigest;
     private boolean       transientInit;
     private RandomData    randomGenerator;
-    private Cipher	  des;
     private ASN1	  asn1;
     /* these values candidates for Transient objects */
     private short         authenticated_id; /* high */
@@ -467,6 +466,13 @@ public class CardEdge extends Applet
     private short         iobuf_size;       /* medium */
     private byte          key_it;           /* low */
     //private byte          channelID;        /* low */
+    
+    // AC: Bugfix & new GP 2.1.1 code - Need a 2-key 3DES Key object for SecureImportKeyEncrypted
+    private DESKey m_2key3desKey = null;
+    
+    // AC: Bugfix & new GP 2.1.1 code
+    private Cipher m_desCipher_cbc;     // rename "des" to "desCipher_cbc"
+    private Cipher m_desCipher_ecb;     // new cipher object for ECB
 
     /**
      * Instance variable objects and array declarations - PERSISTENT
@@ -535,6 +541,13 @@ public class CardEdge extends Applet
 
         Util.arrayFillNonAtomic(default_nonce, ZEROS, NONCE_SIZE, ZEROB);
         Util.arrayFillNonAtomic(issuerInfo, ZEROS,ISSUER_INFO_SIZE, ZEROB);
+
+        // AC: Bugfix & new GP 2.1.1 code - Need a 2-key 3DES Key object for SecureImportKeyEncrypted
+        m_2key3desKey = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES, KeyBuilder.LENGTH_DES3_2KEY, false);
+
+        // AC: Bugfix & new GP 2.1.1 code - Should initialize Cipher objects inside constructor; need additional Cipher object for ECB (used for KCV)
+        m_desCipher_cbc = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
+        m_desCipher_ecb = Cipher.getInstance(Cipher.ALG_DES_ECB_NOPAD, false);
 
         byte appDataLen = 0;
         byte issuerLen = 0;
@@ -719,7 +732,9 @@ public class CardEdge extends Applet
 
 	randomGenerator = null;
 	shaDigest = null;
-	des = null;
+
+	// AC: Bugfix:  We'll initialize the DES cipher object in the constructor to prevent out of memory scenarios.
+	//des = null;
 
 	transientInit = false;
 
@@ -2423,6 +2438,19 @@ public class CardEdge extends Applet
 		!authorizeKeyWrite(pub_key_nb))
 	    ISOException.throwIt(SW_UNAUTHORIZED);
 
+	//DATA:
+	//	Long    ObjectID
+	//	WrappedKey	DesKey
+	//	Byte    IV_Length
+	//	Byte[]  IV_Data
+	//
+	//	WrappedKey:
+	//		Byte    Key Type - DES3 ()
+	//		Byte    Key Size - key size in bytes
+	//		Byte[]  Key Data - encrypted and padded to the correct 3DES block boundary
+	//		Byte    Key Check Size
+	//		Byte[]  Key Check Data
+	
 	short available = Util.makeShort(ZEROB, buffer[ISO7816.OFFSET_LC]);
 
 	if ( available <= WRAPKEY_OFFSET_DATA ) {
@@ -2463,16 +2491,51 @@ public class CardEdge extends Applet
 	    ISOException.throwIt(ISO7816.SW_WRONG_LENGTH); // wrong error code
 	}
 	ivOffset += ISO7816.OFFSET_CDATA;
-
-	ProviderSecurityDomain domain = OPSystem.getSecurityDomain();
-
-	boolean verified = false;
-	verified = domain.decryptVerifyKey(channelID, apdu, 
-				(short)(ISO7816.OFFSET_CDATA+4));
-	if (!verified) {
-	    ISOException.throwIt(SW_BAD_WRAPPED_KEY);
+	
+	
+	
+	// AC: decrypt key data and verify that its length is still 16
+	SecureChannel sc = GPSystem.getSecureChannel();
+	short decryptedWrappedKeySize = sc.decryptData(buffer, (short)(ISO7816.OFFSET_CDATA + WRAPKEY_OFFSET_DATA), desLength);
+	if (decryptedWrappedKeySize != desLength){
+		ISOException.throwIt(SW_BAD_WRAPPED_KEY);
 	}
-
+	
+	// AC: If a KCV length of 3, need to manually compute key check and compare to supplied KCV
+	if (checkLength == 3){
+		// AC: copy key data to temporary Key object for WrappedKey
+		m_2key3desKey.setKey(buffer,(short)(ISO7816.OFFSET_CDATA+WRAPKEY_OFFSET_DATA));
+		
+		// AC: Set first 8 bytes of IO buffer to 0s (we will run this through our cipher)
+		Util.arrayFillNonAtomic(iobuf, (short)0, (short)8, ZEROB);
+		
+		// AC: Initialize WrappedKey for encryption
+		m_desCipher_ecb.init(m_2key3desKey, Cipher.MODE_ENCRYPT);
+		
+		// AC: Compute key check value by encrypting 8 bytes of 0s with the DES key
+		m_desCipher_ecb.doFinal(iobuf,(short)0, (short)8, iobuf, (short)8);
+				
+		// AC: Verify KCV is the same as the computed value
+		if (Util.arrayCompare(iobuf, (short)8, buffer, checkOffset, (short)3) != 0){
+			ISOException.throwIt(SW_BAD_WRAPPED_KEY);
+		}
+	// AC: Can't support anything but a KCV length of 3 or 0
+	}else if(checkLength != 0){
+		ISOException.throwIt(SW_UNSUPPORTED_FEATURE);
+	}
+		
+	// AC: Remove old OP code
+	//ProviderSecurityDomain domain = OPSystem.getSecurityDomain();
+	//
+	//boolean verified = false;
+	//verified = domain.decryptVerifyKey(channelID, apdu, 
+	//			(short)(ISO7816.OFFSET_CDATA+4));
+	//if (!verified) {
+	//    ISOException.throwIt(SW_BAD_WRAPPED_KEY);
+	//}
+	
+	
+	
 	if( obj_class == (short)0xffff && 
 		(obj_id == (short)0xffff || obj_id == (short)0xfffe ) ) {
 	    // I/O Object
@@ -2499,21 +2562,22 @@ public class CardEdge extends Applet
 
 	// get the des key to decrypt the private key
         if (keybuf[base] == 0x01) { // BLOB_ENC_ENCRYPTED
-	  DESKey des3 = (DESKey) KeyBuilder.buildKey(
-		KeyBuilder.TYPE_DES, KeyBuilder.LENGTH_DES3_2KEY, false);
-	  des3.setKey(buffer,(short)(ISO7816.OFFSET_CDATA+WRAPKEY_OFFSET_DATA));
-
-	  if (des == null) {
-	    des = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
-	    //ISOException.throwIt((short)2);
-  	  }
-
-	  // decrypt the private key
-	  des.init(des3, Cipher.MODE_DECRYPT, buffer, 
-					(short)(ivOffset+1), ivLength);
-	  des.doFinal(keybuf, (short)(base+KEYBLOB_OFFSET_KEY_DATA),
-			(short)(keybuf_size-KEYBLOB_OFFSET_KEY_DATA),
-			keybuf, (short)(base+KEYBLOB_OFFSET_KEY_DATA));
+        	// AC: Bugfix: Don't create temporary key object (memory leak); instead use class member
+        	//DESKey des3 = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES, KeyBuilder.LENGTH_DES3_2KEY, false);
+        	//des3.setKey(buffer,(short)(ISO7816.OFFSET_CDATA+WRAPKEY_OFFSET_DATA));
+        	m_2key3desKey.setKey(buffer,(short)(ISO7816.OFFSET_CDATA+WRAPKEY_OFFSET_DATA));
+        	
+        	// AC: Bugfix: We always initialize our cipher object in the constructor to ensure we don't run out of memory at runtime
+        	// if (des == null) {
+        	// 	des = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
+        	// }
+        	
+        	// AC: Renamed member cipher object and using renamed 3des key object.
+        	// decrypt the private key
+        	m_desCipher_cbc.init(m_2key3desKey, Cipher.MODE_DECRYPT, buffer, (short)(ivOffset+1), ivLength);
+        	m_desCipher_cbc.doFinal(keybuf, (short)(base+KEYBLOB_OFFSET_KEY_DATA),
+        				(short)(keybuf_size-KEYBLOB_OFFSET_KEY_DATA),
+        				keybuf, (short)(base+KEYBLOB_OFFSET_KEY_DATA));
         } else if (iobuf[0] != 0x00) {
 	    ISOException.throwIt(SW_INVALID_PARAMETER);
         }
