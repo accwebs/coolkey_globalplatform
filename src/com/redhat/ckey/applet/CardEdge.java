@@ -1973,7 +1973,10 @@ public class CardEdge extends Applet
 	if( ins != INS_INIT_UPDATE ) {
 	    ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
 	}
-	apdu.setIncomingAndReceive();
+	
+	// AC: Don't call apdu.set<anything> prior to calling SecureChannel::ProcessSecurity()
+	//     See https://community.oracle.com/thread/1751589
+	// apdu.setIncomingAndReceive();
 
 	// AC: Process the INITIALIZE-UPDATE command in the GP system
 	//     Note that we haven't taken the approach of processing ALL unknown APDUs as specified in the SecureChannel javadoc.
@@ -2010,7 +2013,9 @@ public class CardEdge extends Applet
 
     private void externalAuthenticate(APDU apdu, byte[] buffer) 
     {
-	apdu.setIncomingAndReceive();
+	// AC: Don't call apdu.set<anything> prior to calling SecureChannel::ProcessSecurity()
+	//     See https://community.oracle.com/thread/1751589
+	//apdu.setIncomingAndReceive();
 	
 	// AC: Process the EXTERNAL-AUTHENTICATE command in the GP system
 	//     Note that we haven't taken the approach of processing ALL unknown APDUs as specified in the SecureChannel javadoc.
