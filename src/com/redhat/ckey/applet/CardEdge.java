@@ -2984,6 +2984,10 @@ public class CardEdge extends Applet
 
     private void processCardReset() {
 	LogoutAll();
+	
+	// AC: Reset security of GP sessions
+	GPSystem.getSecureChannel().resetSecurity();
+	
 	// This flag is CLEAR_ON_RESET, so it will be set to false when
 	// the card is reset or removed.
 	cardResetProcessed[0] = true;
