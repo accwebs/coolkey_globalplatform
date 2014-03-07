@@ -241,6 +241,11 @@ public class CardEdge extends Applet
     private static final byte INS_SEC_READ_IOBUF            = (byte)0x08;
     private static final byte INS_SEC_IMPORT_KEY_ENCRYPTED  = (byte)0x0A;
     private static final byte INS_SEC_START_ENROLLMENT      = (byte)0x0C;
+    
+    /* AC: SCP02 and SCP03 secure channel commands */
+    private static final byte INS_SEC_BEGIN_RMAC            = (byte)0x7A;
+    private static final byte INS_SEC_END_RMAC              = (byte)0x78;
+    
 
 
     // * There have been memory problems on the card
@@ -2080,6 +2085,22 @@ public class CardEdge extends Applet
 	    ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
 	}*/
     }
+    
+    // AC: Method for processing miscellaneous secure channel APDUs (such as BEGIN R-MAC and END R-MAC)
+    private void processMiscSecureChannelApdu(APDU apdu, byte[] buffer) 
+    {
+	// AC: Process the miscellaneous secure-channel APDU command in the GP system
+	short len = 0;
+	SecureChannel sc = GPSystem.getSecureChannel();
+	len = sc.processSecurity(apdu);
+	
+	// AC: send any resulting data in compliance with the spec
+	apdu.setOutgoing();
+	apdu.setOutgoingLength(len);
+	if (len > 0){
+		apdu.sendBytes(ISO7816.OFFSET_CDATA, len);
+	}
+    }
 
     private void verifySecureChannel(APDU apdu, byte[] buffer) {
 	// AC: Retrieve length of received buffer
@@ -3162,6 +3183,11 @@ public class CardEdge extends Applet
 	    externalAuthenticate(apdu, buffer);
 	    break;
 
+	case INS_SEC_END_RMAC:  /* fall through */
+	case INS_SEC_BEGIN_RMAC:
+	    processMiscSecureChannelApdu(apdu, buffer);
+	    break;
+	
 	case INS_SEC_SET_PIN:
 	    resetPIN(apdu, buffer);
 	    break;
