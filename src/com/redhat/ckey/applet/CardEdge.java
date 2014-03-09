@@ -2271,26 +2271,26 @@ public class CardEdge extends Applet
 
 	// AC: Check the key type is as we expect
 	byte macKeyType = buffer[(short)(wrappedKeyFieldOffset + 0)];
-	if (macKeyType != 0x80){
+	if (macKeyType != (byte)(0x80)){
 		ISOException.throwIt(SW_KEY_TYPE_INVALID);
 	}
 	
 	// AC: Check that the key size is valid (i.e. enough data exists in the buffer)
 	short macKeySize = (short)(buffer[(short)(wrappedKeyFieldOffset + 1)] & 0x00FF);
-	if (macKeySize != 0x10){
+	if (macKeySize != (byte)(0x10)){
 		ISOException.throwIt(SW_KEY_SIZE_ERROR);
 	}
 	
 	// AC: Check that key check size is valid (must be zero due to silly length == 23 check above)
 	short macKeyCheckSize = (short)(buffer[(short)(wrappedKeyFieldOffset + 2 + 0x10)] & 0x00FF);
-	if (macKeyCheckSize != 0){ 
+	if (macKeyCheckSize != (byte)(0)){ 
 		ISOException.throwIt(SW_UNSUPPORTED_FEATURE);
 	}
 	
 	// AC: decrypt key data and verify that its length is still 16
 	SecureChannel sc = GPSystem.getSecureChannel();
 	short decryptedMacKeySize = sc.decryptData(buffer,(short)(wrappedKeyFieldOffset + 2), macKeySize);
-	if (decryptedMacKeySize != 0x10){
+	if (decryptedMacKeySize != (byte)(0x10)){
 		ISOException.throwIt(SW_BAD_WRAPPED_KEY);
 	}
 	
@@ -2528,7 +2528,7 @@ public class CardEdge extends Applet
 	}
 	
 	// AC: If a KCV length of 3, need to manually compute key check and compare to supplied KCV
-	if (checkLength == 3){
+	if (checkLength == (short)(3)){
 		// AC: copy key data to temporary Key object for WrappedKey
 		m_2key3desKey.setKey(buffer,(short)(ISO7816.OFFSET_CDATA+WRAPKEY_OFFSET_DATA));
 		
@@ -2546,7 +2546,7 @@ public class CardEdge extends Applet
 			ISOException.throwIt(SW_BAD_WRAPPED_KEY);
 		}
 	// AC: Can't support anything but a KCV length of 3 or 0
-	}else if(checkLength != 0){
+	}else if(checkLength != (short)(0)){
 		ISOException.throwIt(SW_UNSUPPORTED_FEATURE);
 	}
 		
