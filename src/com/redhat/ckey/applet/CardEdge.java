@@ -2109,9 +2109,9 @@ public class CardEdge extends Applet
 	// AC: Get Secure channel
 	SecureChannel sc = GPSystem.getSecureChannel();
 	
-	// AC: Check secure channel state
+	// AC: Check secure channel state - must be authenticated with at least CMAC
 	byte securityLevel = sc.getSecurityLevel();
-	if ((securityLevel & SecureChannel.AUTHENTICATED) == 0){
+	if (((securityLevel & SecureChannel.AUTHENTICATED) == 0) || ((securityLevel & SecureChannel.C_MAC) == 0)){
 		// authentication has not occurred
 		ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
 	}
@@ -2121,7 +2121,7 @@ public class CardEdge extends Applet
 
 	// AC: Check secure channel state (again - after unwrap)
 	securityLevel = sc.getSecurityLevel();
-	if ((securityLevel & SecureChannel.AUTHENTICATED) == 0){
+	if (((securityLevel & SecureChannel.AUTHENTICATED) == 0) || ((securityLevel & SecureChannel.C_MAC) == 0)){
 		// authentication is no longer valid after unwrap
 		ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
 	}
