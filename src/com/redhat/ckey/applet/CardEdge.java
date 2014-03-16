@@ -2542,7 +2542,7 @@ public class CardEdge extends Applet
 		m_desCipher_ecb.doFinal(iobuf,(short)0, (short)8, iobuf, (short)8);
 				
 		// AC: Verify KCV is the same as the computed value
-		if (Util.arrayCompare(iobuf, (short)8, buffer, checkOffset, (short)3) != 0){
+		if (Util.arrayCompare(iobuf, (short)8, buffer, (short)(ISO7816.OFFSET_CDATA+checkOffset+1), (short)3) != 0){
 			ISOException.throwIt(SW_BAD_WRAPPED_KEY);
 		}
 	// AC: Can't support anything but a KCV length of 3 or 0
