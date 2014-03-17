@@ -1,0 +1,26 @@
+mode_211
+enable_trace
+establish_context
+card_connect -readerNumber 1
+select -AID 627601FF000000
+
+// open secure channel with encryption and mac
+open_sc -security 3 -scp 2 -scpimpl 21 -keyind 0 -keyver 0 -key 404142434445464748494a4b4c4d4e4f -keyDerivation emvcps11
+
+// encrypted MAC key - can be any value
+set -result_var encryptedMac -data e5ff876d62fa47dfa8783cb682777314
+
+// decrypt random MAC key using DEK
+set -result_var decryptedMac -cipher des2 -cipherdirection decrypt -cipherchainmode ecb -sessionkey dek -data %encryptedMac%
+
+// perform key generation
+//                           80 0800 00 8010 %encryptedMac% 00 
+send_apdu -sc 1 -APDU 840c003117800800008010%encryptedMac%00
+
+// read coolkey io buffer data (public key will be placed there)
+send_apdu -sc 1 -APDU 8456000009ffffffff00000000d0
+send_apdu -sc 1 -APDU 8456000009ffffffff000000d0d0
+send_apdu -sc 1 -APDU 8456000009ffffffff000001a06f
+
+card_disconnect
+release_context
