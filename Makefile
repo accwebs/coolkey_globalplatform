@@ -137,7 +137,7 @@ clean:
 # Rule to build .class files from .java source
 #############################################################################
 
-BUILD_CLASSPATH="${JC_HOME}/lib/api.jar:${GP_HOME}"
+BUILD_CLASSPATH="${JC_HOME}/lib/api.jar:${GP_HOME}/bin/visaop20.jar"
 
 # build rule
 $(JAVA_CLASS_FILES): $(JAVA_SRC_FILES)
@@ -153,7 +153,7 @@ $(JAVA_CLASS_FILES): $(JAVA_SRC_FILES)
 #############################################################################
 
 # Location of the .exp files, used for "linking" Javacard code.
-EXPORT_PATH="$(JC_HOME)/api_export_files:$(GP_HOME)"
+EXPORT_PATH="$(JC_HOME)/api_export_files:$(GP_HOME)/export_files"
 
 # build rule
 $(CONVERTER_OUTPUT_DIR)/applet.cap: $(JAVA_CLASS_FILES)
@@ -168,6 +168,6 @@ $(CONVERTER_OUTPUT_DIR)/applet.cap: $(JAVA_CLASS_FILES)
 #############################################################################
 
 verifycapfile:
-	$(JC_HOME)/bin/verifycap $(VERIFIER_FLAGS) -package $(PACKAGE) $(GP_HOME)/org/globalplatform/javacard/globalplatform.exp $(JC_HOME)/api_export_files/java/lang/javacard/lang.exp $(JC_HOME)/api_export_files/javacard/framework/javacard/framework.exp $(JC_HOME)/api_export_files/javacard/security/javacard/security.exp $(JC_HOME)/api_export_files/javacardx/crypto/javacard/crypto.exp $(CONVERTER_OUTPUT_DIR)/applet.cap 
+	$(JC_HOME)/bin/verifycap $(VERIFIER_FLAGS) -package $(PACKAGE) $(GP_HOME)/export_files/visa/openplatform/javacard/openplatform.exp $(JC_HOME)/api_export_files/java/lang/javacard/lang.exp $(JC_HOME)/api_export_files/javacard/framework/javacard/framework.exp $(JC_HOME)/api_export_files/javacard/security/javacard/security.exp $(JC_HOME)/api_export_files/javacardx/crypto/javacard/crypto.exp $(CONVERTER_OUTPUT_DIR)/applet.cap 
 
 #############################################################################
