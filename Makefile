@@ -99,8 +99,8 @@ APPLET_QUALIFIED_CLASS_NAME=$(PACKAGE).$(APPLET_CLASS_NAME)
 
 CONVERTER_OUTPUT_DIR=$(OUTPUT_DIR)/$(PACKAGE_DIR)/javacard
 
-JAVAC=$(JAVA_HOME)/bin/javac
-JAVA=$(JAVA_HOME)/bin/java
+JAVAC="$(JAVA_HOME)/bin/javac"
+JAVA="$(JAVA_HOME)/bin/java"
 
 JAVA_SRC_FILENAMES=$(notdir $(JAVA_SRC_FILES))
 JAVA_CLASS_FILES=$(patsubst %.java,$(OUTPUT_DIR)/$(PACKAGE_DIR)/%.class, $(JAVA_SRC_FILENAMES))
@@ -157,7 +157,7 @@ EXPORT_PATH="$(JC_HOME)/api_export_files:$(GP_HOME)"
 
 # build rule
 $(CONVERTER_OUTPUT_DIR)/applet.cap: $(JAVA_CLASS_FILES)
-	$(JC_HOME)/bin/converter $(CONVERTER_FLAGS) -classdir $(OUTPUT_DIR) -out EXP JCA CAP -exportpath $(EXPORT_PATH) -applet $(AID) $(APPLET_QUALIFIED_CLASS_NAME) -d $(OUTPUT_DIR) $(PACKAGE) $(PID) $(MAJOR_VERSION).$(MINOR_VERSION) 
+	"$(JC_HOME)/bin/converter" $(CONVERTER_FLAGS) -classdir $(OUTPUT_DIR) -out EXP JCA CAP -exportpath $(EXPORT_PATH) -applet $(AID) $(APPLET_QUALIFIED_CLASS_NAME) -d $(OUTPUT_DIR) $(PACKAGE) $(PID) $(MAJOR_VERSION).$(MINOR_VERSION) 
 
 #############################################################################
 
@@ -168,6 +168,6 @@ $(CONVERTER_OUTPUT_DIR)/applet.cap: $(JAVA_CLASS_FILES)
 #############################################################################
 
 verifycapfile:
-	$(JC_HOME)/bin/verifycap $(VERIFIER_FLAGS) -package $(PACKAGE) $(GP_HOME)/org/globalplatform/javacard/globalplatform.exp $(JC_HOME)/api_export_files/java/lang/javacard/lang.exp $(JC_HOME)/api_export_files/javacard/framework/javacard/framework.exp $(JC_HOME)/api_export_files/javacard/security/javacard/security.exp $(JC_HOME)/api_export_files/javacardx/crypto/javacard/crypto.exp $(CONVERTER_OUTPUT_DIR)/applet.cap 
+	"$(JC_HOME)/bin/verifycap" $(VERIFIER_FLAGS) -package $(PACKAGE) "$(GP_HOME)/org/globalplatform/javacard/globalplatform.exp" "$(JC_HOME)/api_export_files/java/lang/javacard/lang.exp" "$(JC_HOME)/api_export_files/javacard/framework/javacard/framework.exp" "$(JC_HOME)/api_export_files/javacard/security/javacard/security.exp" "$(JC_HOME)/api_export_files/javacardx/crypto/javacard/crypto.exp" $(CONVERTER_OUTPUT_DIR)/applet.cap 
 
 #############################################################################
