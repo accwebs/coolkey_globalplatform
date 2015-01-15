@@ -1873,9 +1873,12 @@ public class CardEdge extends Applet
 	if (numBytes != apdu.setIncomingAndReceive())
 	    ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 
-	// Attempt to turn off blocking, just use the verify timeout
-	//if (pin.getTriesRemaining() == 0)
-        //   ISOException.throwIt(SW_IDENTITY_BLOCKED);
+	// ACC: Revert code change that breaks SW_IDENTITY_BLOCKED message
+	//      The previous decision to remove the below "if" statement caused 
+	//      pin lockout to still occur, but prevented a unique message from
+	//      being returned under the condition that the pin was already locked.
+	if (pin.getTriesRemaining() == 0)
+	    ISOException.throwIt(SW_IDENTITY_BLOCKED);
 	
 	if (!CheckPINPolicy(buffer,ISO7816.OFFSET_CDATA,(byte)numBytes)
 	  || !pin.check(buffer, ISO7816.OFFSET_CDATA, (byte)numBytes))
