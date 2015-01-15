@@ -215,6 +215,7 @@ public class CardEdge extends Applet
     private static final byte INS_GET_RANDOM      = (byte)0x72;
     private static final byte INS_SEED_RANDOM     = (byte)0x73;
     private static final byte INS_GET_BUILTIN_ACL = (byte)0xFA;
+    private static final byte INS_GET_PIN_REMAINING_TRIES = (byte)0x4A;  // ACC: Add ability to get PIN remaining tries.
 
     /* nonce validated only */
     private static final byte INS_LOGOUT	= (byte)0x61;
@@ -1891,6 +1892,40 @@ public class CardEdge extends Applet
 	sendData(apdu, nonce, ZEROS, NONCE_SIZE);
     }
 
+    // ACC: Add ability to get PIN remaining tries.
+    private void getPINRemainingTries(APDU apdu, byte buffer[])
+    {
+        // P1 contains PIN id to use
+        byte pin_nb = buffer[ISO7816.OFFSET_P1];
+        
+        // check for invalid PIN id specified
+        if (pin_nb < 0 || pin_nb >= MAX_NUM_PINS)
+            ISOException.throwIt(SW_INCORRECT_P1);
+        
+        // get OwnerPIN object instance and check that instance exists
+        OwnerPIN pin = pins[pin_nb];
+        if (pin == null)
+            ISOException.throwIt(SW_INCORRECT_P1);
+        
+        // check that P2 == 0
+        if (buffer[ISO7816.OFFSET_P2] != 0)
+            ISOException.throwIt(SW_INCORRECT_P2);
+        
+        // check that Lc == 1
+        if (buffer[ISO7816.OFFSET_LC] != 1){
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        
+        // get tries remaining for this PIN
+        byte triesRemaining = pin.getTriesRemaining();
+        
+        // copy remaining tries to byte 0 of buffer (the only byte we will send back)
+        buffer[0] = triesRemaining;
+        
+        // send data
+        apdu.setOutgoingAndSend(ZEROS, (short)1);
+    }
+
     private void WriteObject(APDU apdu, byte buffer[])
     {
 	if (buffer[ISO7816.OFFSET_P1] != 0)
@@ -2916,6 +2951,10 @@ public class CardEdge extends Applet
 	    getBuiltInACL(apdu, buffer);
 	    break;
 
+	// ACC: Add ability to get PIN remaining tries.
+	case INS_GET_PIN_REMAINING_TRIES:
+	    getPINRemainingTries(apdu, buffer);
+	    break;
 
 	case INS_NOP:
 	    break;
